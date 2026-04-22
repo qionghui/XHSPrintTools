@@ -1,0 +1,138 @@
+object Form1: TForm1
+  Left = 0
+  Top = 0
+  Caption = #26631#31614#25171#21360
+  ClientHeight = 637
+  ClientWidth = 883
+  Color = clBtnFace
+  Font.Charset = DEFAULT_CHARSET
+  Font.Color = clWindowText
+  Font.Height = -8
+  Font.Name = 'Segoe UI'
+  Font.Style = []
+  WindowState = wsMaximized
+  OnCreate = FormCreate
+  OnShow = FormShow
+  PixelsPerInch = 96
+  TextHeight = 11
+  object Panel1: TPanel
+    Left = 0
+    Top = 0
+    Width = 883
+    Height = 105
+    Margins.Left = 2
+    Margins.Top = 2
+    Margins.Right = 2
+    Margins.Bottom = 2
+    Align = alTop
+    TabOrder = 0
+    object LabeledEdit1: TLabeledEdit
+      Left = 16
+      Top = 40
+      Width = 121
+      Height = 19
+      EditLabel.Width = 16
+      EditLabel.Height = 11
+      EditLabel.Caption = #31579#36873
+      TabOrder = 0
+      Text = ''
+      OnChange = LabeledEdit1Change
+    end
+    object Button1: TButton
+      Left = 160
+      Top = 39
+      Width = 97
+      Height = 25
+      Caption = #29983#25104#25171#21360#34920#26684
+      TabOrder = 1
+      OnClick = Button1Click
+    end
+    object Button2: TButton
+      Left = 263
+      Top = 40
+      Width = 97
+      Height = 25
+      Caption = #25171#24320#21830#21697#37197#32622#34920
+      TabOrder = 2
+    end
+    object Button3: TButton
+      Left = 366
+      Top = 39
+      Width = 97
+      Height = 25
+      Caption = #26368#26032#25171#21360#34917#25171
+      TabOrder = 3
+      OnClick = Button3Click
+    end
+    object Button4: TButton
+      Left = 469
+      Top = 39
+      Width = 124
+      Height = 25
+      Caption = #34917#25171#26368#26032#25171#21360#31532#19968#26465
+      TabOrder = 4
+      OnClick = Button4Click
+    end
+  end
+  object Panel2: TPanel
+    Left = 0
+    Top = 105
+    Width = 883
+    Height = 532
+    Margins.Left = 2
+    Margins.Top = 2
+    Margins.Right = 2
+    Margins.Bottom = 2
+    Align = alClient
+    Caption = 'Panel2'
+    TabOrder = 1
+    ExplicitTop = 54
+    ExplicitWidth = 412
+    ExplicitHeight = 229
+    object pgc1: TPageControl
+      Left = 1
+      Top = 1
+      Width = 881
+      Height = 530
+      ActivePage = TabSheet2
+      Align = alClient
+      TabOrder = 0
+      ExplicitWidth = 410
+      ExplicitHeight = 227
+      object TabSheet1: TTabSheet
+        Caption = #25163#25171#25171#21360
+        object StringGrid1: TStringGrid
+          Left = 0
+          Top = 0
+          Width = 873
+          Height = 504
+          Align = alClient
+          TabOrder = 0
+          OnMouseDown = StringGrid1MouseDown
+          ExplicitHeight = 555
+        end
+      end
+      object TabSheet2: TTabSheet
+        Caption = #26368#26032#25171#21360
+        ImageIndex = 1
+        object StringGrid2: TStringGrid
+          Left = 0
+          Top = 0
+          Width = 873
+          Height = 504
+          Align = alClient
+          TabOrder = 0
+          OnMouseDown = StringGrid2MouseDown
+          ExplicitWidth = 402
+          ExplicitHeight = 201
+        end
+      end
+    end
+  end
+  object Timer1: TTimer
+    Enabled = False
+    OnTimer = Timer1Timer
+    Left = 213
+    Top = 252
+  end
+end

@@ -1,0 +1,554 @@
+﻿unit UMain;
+
+interface
+
+uses
+  Winapi.Windows, Winapi.Messages, System.SysUtils, System.Variants, System.Classes, Vcl.Graphics,
+  Vcl.Controls, Vcl.Forms, Vcl.Dialogs, Vcl.Grids, Vcl.ExtCtrls, ComObj, System.JSON,
+  Vcl.StdCtrls, Vcl.Mask, Vcl.ComCtrls, Vcl.CheckLst;
+
+type
+  TForm1 = class(TForm)
+    Panel1: TPanel;
+    Panel2: TPanel;
+    StringGrid1: TStringGrid;
+    LabeledEdit1: TLabeledEdit;
+    Button1: TButton;
+    Button2: TButton;
+    pgc1: TPageControl;
+    TabSheet1: TTabSheet;
+    TabSheet2: TTabSheet;
+    Button3: TButton;
+    Button4: TButton;
+    Timer1: TTimer;
+    StringGrid2: TStringGrid;
+    Panel3: TPanel;
+    Panel4: TPanel;
+    CheckListBox1: TCheckListBox;
+    procedure FormCreate(Sender: TObject);
+    procedure LabeledEdit1Change(Sender: TObject);
+    procedure Button1Click(Sender: TObject);
+    procedure StringGrid1MouseDown(Sender: TObject; Button: TMouseButton;
+      Shift: TShiftState; X, Y: Integer);
+    procedure FormShow(Sender: TObject);
+    procedure Timer1Timer(Sender: TObject);
+    procedure StringGrid2MouseDown(Sender: TObject; Button: TMouseButton;
+      Shift: TShiftState; X, Y: Integer);
+    procedure Button3Click(Sender: TObject);
+    procedure Button4Click(Sender: TObject);
+    procedure pgc1Change(Sender: TObject);
+    procedure CheckListBox1ClickCheck(Sender: TObject);
+    procedure CheckListBox1Click(Sender: TObject);
+  private
+    FRowHeights: integer;
+    ForderExcelDirectory: String;
+    function FindPYValue(const item: string): string;
+    procedure LoadExcelToGrid(const FileName: string; StringGrid: TStringGrid);
+    procedure AutoSizeColumns(Grid: TStringGrid);
+    procedure ApplyFilter(const FilterText: string);
+    procedure SaveGridToExcel(const FileName: string; StringGrid: TStringGrid);
+    procedure ClearFilterAndNum;
+    { Private declarations }
+  public
+    { Public declarations }
+
+  end;
+
+Const
+  goodlist: array[0..13] of string = ('莲子', '银耳', '百合', '金线莲','桂圆', '姬松茸', '龙须草', '五指毛桃', '鹿茸菇', '红枣',
+    '雪梨干', '羊肚菌', '风鼓草', '铁棍山药');
+  goodpylist: array[0..2] of string = ('lz', 'ye', 'bh', '','','','','','','','','','','','');
+
+var
+  Form1: TForm1;
+
+
+implementation
+
+{$R *.dfm}
+
+
+function TForm1.FindPYValue(const item: string): string;
+var
+  i: Integer;
+begin
+  Result := '';
+  for i := Low(goodlist) to High(goodlist) do
+  begin
+    if goodlist[i] = item then
+    begin
+      Result := goodpylist[i];
+      LabeledEdit1.Text := Result;
+      Break;
+    end;
+  end;
+end;
+
+
+procedure TForm1.FormCreate(Sender: TObject);
+var
+  FilePath: string;
+  JSONString: TStringList;
+  ConfigJSON: TJSONObject;
+  i: Integer;
+  str: PChar;
+begin
+
+  pgc1.ActivePage := TabSheet1;
+
+  // 获取当前可执行文件所在的文件夹路径
+  FilePath := ExtractFilePath(ParamStr(0)) + 'goods.xlsx';
+
+  // 检查文件是否存在
+  if FileExists(FilePath) then
+  begin
+    // 加载Excel文件到StringGrid
+    LoadExcelToGrid(FilePath, StringGrid1);
+  end
+  else
+  begin
+    ShowMessage('文件 goods.xlsx 未找到！');
+  end;
+  StringGrid1.Options := StringGrid1.Options + [goEditing];
+  StringGrid1.FixedCols := 0;
+  FRowHeights := StringGrid1.DefaultRowHeight;
+
+  FilePath := ExtractFilePath(ParamStr(0)) + 'config.json';
+
+  //但当前目录读取congfig.json
+  if FileExists(FilePath) then
+  begin
+    try
+      JSONString := TStringList.Create;
+      try
+        JSONString.LoadFromFile(FilePath, TEncoding.UTF8);
+        ConfigJSON := TJSONObject.ParseJSONValue(JSONString.Text) as TJSONObject;
+        if Assigned(ConfigJSON) then
+        begin
+          if ConfigJSON.TryGetValue('orderExcelDirectory', ForderExcelDirectory) then
+            ; //ShowMessage('应用程序名称: ' + ForderExcelDirectory);
+        end
+        else
+        begin
+          ShowMessage('config.json 文件内容无效！');
+        end;
+      finally
+        JSONString.Free;
+      end;
+    except
+      on E: Exception do
+        ShowMessage('读取 config.json 文件时发生错误：' + E.Message);
+    end;
+  end
+  else
+  begin
+    ShowMessage('文件 config.json 未找到！');
+  end;
+
+
+
+  for I := Low(goodlist) to High(goodlist) do
+  begin
+    CheckListBox1.AddItem(goodlist[i], nil);
+  end;
+
+end;
+
+
+
+procedure TForm1.FormShow(Sender: TObject);
+begin
+ LabeledEdit1.SetFocus;
+ Timer1.Enabled := True;
+end;
+
+procedure TForm1.LabeledEdit1Change(Sender: TObject);
+begin
+  ApplyFilter(LabeledEdit1.Text);
+end;
+
+procedure TForm1.ApplyFilter(const FilterText: string);
+var
+  i, j: Integer;
+  Match: Boolean;
+begin
+  // 遍历每一行（从第一行开始，跳过标题行）
+  for i := 1 to StringGrid1.RowCount - 1 do
+  begin
+
+    Match := False;
+
+    // 遍历每一列，检查是否匹配筛选条件
+    for j := 0 to StringGrid1.ColCount - 1 do
+    begin
+      if (FilterText = '') or (Pos(FilterText, StringGrid1.Cells[j, i]) > 0) then
+      begin
+        Match := True;
+        Break;
+      end;
+    end;
+
+    // 设置行高（0 表示隐藏，-1 表示默认高度）
+    if Match then
+      StringGrid1.RowHeights[i] := FRowHeights // 显示匹配的行
+    else
+      StringGrid1.RowHeights[i] := 0; // 隐藏不匹配的行
+  end;
+end;
+
+procedure TForm1.LoadExcelToGrid(const FileName: string; StringGrid: TStringGrid);
+var
+  ExcelApp, Workbook, Sheet: Variant;
+  RowCount, ColCount, i, j: Integer;
+begin
+  // 初始化Excel应用程序
+  ExcelApp := CreateOleObject('Excel.Application');
+  try
+    ExcelApp.Visible := False;
+    ExcelApp.DisplayAlerts := False;
+
+    // 打开工作簿
+    Workbook := ExcelApp.Workbooks.Open(FileName);
+    try
+      // 获取第一个工作表
+      Sheet := Workbook.Sheets[1];
+
+      // 获取行数和列数
+      RowCount := Sheet.UsedRange.Rows.Count;
+      ColCount := Sheet.UsedRange.Columns.Count;
+
+      // 设置StringGrid的行数和列数
+      StringGrid.RowCount := RowCount; // 不需要额外行，因为列名已经在Excel中
+      StringGrid.ColCount := ColCount + 1; // +1 用于新增的“数量”列
+
+      // 设置第一行的列名
+      StringGrid.Cells[0, 0] := '数量'; // 新增的“数量”列
+      for j := 1 to ColCount do
+      begin
+        StringGrid.Cells[j, 0] := Sheet.Cells[1, j].Text; // Excel中的列名
+      end;
+
+      // 加载Excel数据到StringGrid（从第二行开始）
+      for i := 2 to RowCount do
+      begin
+        // 设置“数量”列的默认值
+        StringGrid.Cells[0, i - 1] := '';
+
+        // 加载Excel数据
+        for j := 1 to ColCount do
+        begin
+          StringGrid.Cells[j, i - 1] := Sheet.Cells[i, j].Text;
+        end;
+      end;
+    finally
+      // 关闭工作簿
+      Workbook.Close(False);
+    end;
+  finally
+    // 退出Excel应用程序
+    ExcelApp.Quit;
+    ExcelApp := Unassigned;
+  end;
+  AutoSizeColumns(StringGrid);
+end;
+
+
+procedure TForm1.pgc1Change(Sender: TObject);
+begin
+  Timer1.Enabled := True;
+end;
+
+procedure TForm1.AutoSizeColumns(Grid: TStringGrid);
+var
+  i, j, MaxWidth, CellWidth: Integer;
+begin
+  for i := 0 to Grid.ColCount - 1 do
+  begin
+    MaxWidth := 0;
+
+    // 遍历每一行，计算最大宽度
+    for j := 0 to Grid.RowCount - 1 do
+    begin
+      CellWidth := Grid.Canvas.TextWidth(Grid.Cells[i, j]) + 10; // 增加一些边距
+      if CellWidth > MaxWidth then
+        MaxWidth := CellWidth;
+    end;
+
+    // 设置列宽
+    Grid.ColWidths[i] := MaxWidth;
+  end;
+end;
+
+procedure TForm1.Button1Click(Sender: TObject);
+var
+  SavePath: string;
+begin
+
+
+
+  // 设置保存路径
+  SavePath := ForderExcelDirectory + '\' + FormatDateTime('yyyyMMdd_hhnnss', Now) + '手动打单.xlsx';
+
+  // 保存StringGrid内容到Excel
+  SaveGridToExcel(SavePath, StringGrid1);
+
+  //还原第一列为空
+  ClearFilterAndNum;
+end;
+
+procedure TForm1.Button3Click(Sender: TObject);
+var
+  SavePath: string;
+begin
+
+  //清空＋第一列勾选
+  if pgc1.ActivePage <> TabSheet2 then
+    Exit;
+
+  // 设置保存路径
+  SavePath := ForderExcelDirectory + '\' + FormatDateTime('yyyyMMdd_hhnnss', Now) + '手动打单.xlsx';
+  // 保存StringGrid内容到Excel
+  SaveGridToExcel(SavePath, StringGrid2);
+end;
+
+procedure TForm1.Button4Click(Sender: TObject);
+var
+  SavePath: string;
+  i: Integer;
+
+begin
+
+  // 处理当前行之前的行
+  for i := 1 to StringGrid2.Row - 1 do  // 从1开始跳过标题行
+  begin
+    // 设置之前的行为空
+    StringGrid2.Cells[1, i] := '';
+  end;
+  StringGrid2.Cells[0, 1] := '1';
+
+
+  // 设置保存路径
+  SavePath := ForderExcelDirectory + '\' + FormatDateTime('yyyyMMdd_hhnnss', Now) + '手动打单.xlsx';
+  // 保存StringGrid内容到Excel
+  SaveGridToExcel(SavePath, StringGrid2);
+end;
+
+procedure TForm1.CheckListBox1Click(Sender: TObject);
+var
+  pt: TPoint;
+  Index: Integer;
+  i: Integer;
+begin
+  for i := 0 to CheckListBox1.Items.Count - 1 do
+  begin
+    if i <> CheckListBox1.ItemIndex then
+      CheckListBox1.Checked[i] := False;
+  end;
+
+  
+  if CheckListBox1.ItemIndex >= 0 then
+  begin
+    FindPYValue(CheckListBox1.Items[CheckListBox1.ItemIndex]);
+  end;
+
+end;
+
+procedure TForm1.CheckListBox1ClickCheck(Sender: TObject);
+var
+  i: Integer;
+  SelectedCaption: string;
+begin
+  for i := 0 to CheckListBox1.Items.Count - 1 do
+  begin
+    if i <> CheckListBox1.ItemIndex then
+      CheckListBox1.Checked[i] := False;
+  end;
+  // 获取当前选中项的Caption
+  if CheckListBox1.ItemIndex >= 0 then
+  begin
+    SelectedCaption := CheckListBox1.Items[CheckListBox1.ItemIndex];
+    FindPYValue(SelectedCaption);
+  end;
+end;
+
+procedure TForm1.ClearFilterAndNum;
+var
+  ExcelApp, Workbook, Sheet: Variant;
+  i, j, ExcelRow: Integer;
+begin
+  // 初始化Excel应用程序
+  ExcelApp := CreateOleObject('Excel.Application');
+  try
+    ExcelApp.Visible := False;
+    ExcelApp.DisplayAlerts := False;
+    try
+      // 将StringGrid的内容写入Excel
+      for i := 1 to StringGrid1.RowCount - 1 do
+        StringGrid1.Cells[0, i] := '';
+    finally
+    end;
+  finally
+    // 退出Excel应用程序
+    ExcelApp.Quit;
+    ExcelApp := Unassigned;
+  end;
+end;
+
+procedure TForm1.SaveGridToExcel(const FileName: string; StringGrid: TStringGrid);
+var
+  ExcelApp, Workbook, Sheet: Variant;
+  i, j, ExcelRow: Integer;
+begin
+  // 初始化Excel应用程序
+  ExcelApp := CreateOleObject('Excel.Application');
+  try
+    ExcelApp.Visible := False;
+    ExcelApp.DisplayAlerts := False;
+
+    // 创建新工作簿
+    Workbook := ExcelApp.Workbooks.Add;
+    try
+      // 获取第一个工作表
+      Sheet := Workbook.Sheets[1];
+
+      // 写入列名（第一行）
+      for j := 0 to StringGrid.ColCount - 1 do
+      begin
+        Sheet.Cells[1, j + 1] := StringGrid.Cells[j, 0];
+      end;
+
+      // 初始化Excel行号（从第二行开始）
+      ExcelRow := 2;
+
+      // 将StringGrid的内容写入Excel
+      for i := 1 to StringGrid.RowCount - 1 do
+      begin
+        // 筛选“数量”列大于0的行
+        if StrToIntDef(StringGrid.Cells[0, i], 0) > 0 then
+        begin
+          // 写入当前行数据
+          for j := 0 to StringGrid.ColCount - 1 do
+          begin
+            Sheet.Cells[ExcelRow, j + 1] := StringGrid.Cells[j, i];
+          end;
+          // 增加Excel行号
+          Inc(ExcelRow);
+        end;
+      end;
+
+      // 保存工作簿
+      if ExcelRow > 2 then
+        Workbook.SaveAs(FileName);
+    finally
+      // 关闭工作簿
+      Workbook.Close(False);
+    end;
+  finally
+    // 退出Excel应用程序
+    ExcelApp.Quit;
+    ExcelApp := Unassigned;
+  end;
+end;
+
+procedure TForm1.StringGrid1MouseDown(Sender: TObject; Button: TMouseButton;
+  Shift: TShiftState; X, Y: Integer);
+var
+  Col, Row: Longint;
+  CurrentValue: Integer;
+  CellText: string;
+begin
+  // 获取点击的单元格位置
+  StringGrid1.MouseToCell(X, Y, Col, Row);
+
+  // 检查是否为第一列且非标题行
+  if (Col = 0) and (Row > 0) then
+  begin
+    CellText := StringGrid1.Cells[Col, Row];
+
+    // 处理当前单元格的值
+    if CellText.IsEmpty then
+      CurrentValue := 0
+    else if not TryStrToInt(CellText, CurrentValue) then
+      CurrentValue := 0; // 非数字内容视为0
+
+    // 根据按键调整数值
+    if Button = mbLeft then
+      Inc(CurrentValue)
+    else if Button = mbRight then
+      Dec(CurrentValue);
+
+    // 更新单元格内容
+    if (Button = mbRight) and (CurrentValue <= 0) then
+      StringGrid1.Cells[Col, Row] := ''
+    else
+      StringGrid1.Cells[Col, Row] := IntToStr(CurrentValue);
+  end;
+
+end;
+
+procedure TForm1.StringGrid2MouseDown(Sender: TObject; Button: TMouseButton;
+  Shift: TShiftState; X, Y: Integer);
+var
+  Col, Row: Longint;
+  CurrentValue: Integer;
+  CellText: string;
+  i: Integer;
+begin
+  // 获取点击的单元格位置
+  StringGrid2.MouseToCell(X, Y, Col, Row);
+
+  // 检查是否为第一列且非标题行
+  if (Col = 0) and (Row > 0) then
+  begin
+    // 获取当前单元格的值
+    CellText := StringGrid2.Cells[Col, Row];
+
+    // 切换选中状态（如果是✓就清空，否则设为✓）
+    if CellText = '✓' then
+      StringGrid2.Cells[Col, Row] := ''
+    else
+      StringGrid2.Cells[Col, Row] := '1';
+
+    // 处理当前行及之后的行
+    for i := Row to StringGrid2.RowCount - 1 do
+    begin
+      if i = Row then
+        // 当前行已经处理过，跳过
+        Continue;
+      // 设置后续行为✓
+      StringGrid2.Cells[Col, i] := '1';
+    end;
+
+    // 处理当前行之前的行
+    for i := 1 to Row - 1 do  // 从1开始跳过标题行
+    begin
+      // 设置之前的行为空
+      StringGrid2.Cells[Col, i] := '';
+    end;
+  end;
+end;
+
+procedure TForm1.Timer1Timer(Sender: TObject);
+var
+  FilePath: string;
+  JSONString: TStringList;
+  ConfigJSON: TJSONObject;
+begin
+  Timer1.Enabled := False;
+
+  // 获取当前可执行文件所在的文件夹路径
+  FilePath := ExtractFilePath(ParamStr(0)) + 'latest_print_file.xlsx';
+
+  // 检查文件是否存在
+  if FileExists(FilePath) then
+    LoadExcelToGrid(FilePath, StringGrid2)
+  else
+    ShowMessage('文件 latest_print_file.xlsx 未找到！');
+
+  StringGrid2.Options := StringGrid2.Options + [goEditing];
+  StringGrid2.FixedCols := 0;
+  FRowHeights := StringGrid2.DefaultRowHeight;
+
+end;
+
+end.

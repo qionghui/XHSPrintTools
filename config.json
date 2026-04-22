@@ -1,0 +1,19 @@
+{
+    "orderExcelDirectory": "E:/xunlei",
+    "orderExcelBackupDirectory": "C:/Users/51755/Documents/WeidaPrint/Bill/bak",
+    "printExcelDirectory": "C:/Users/51755/Documents/WeidaPrint/Print",
+    "ggid_field":["规格ID"],
+    "num_field":["SKU件数", "数量"],
+    "labelType": "new",
+    "isLandscape": false,
+    "labelSizes": {
+        "old": {
+            "width": 50,
+            "height": 40
+        },
+        "new": {
+            "width": 50,
+            "height": 80
+        }
+    }
+}
