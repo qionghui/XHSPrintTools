@@ -21,7 +21,6 @@ type
     Button3: TButton;
     Button4: TButton;
     Timer1: TTimer;
-    Timer2: TTimer;
     StringGrid2: TStringGrid;
     Panel3: TPanel;
     Panel4: TPanel;
@@ -33,7 +32,6 @@ type
       Shift: TShiftState; X, Y: Integer);
     procedure FormShow(Sender: TObject);
     procedure Timer1Timer(Sender: TObject);
-    procedure Timer2Timer(Sender: TObject);
     procedure StringGrid2MouseDown(Sender: TObject; Button: TMouseButton;
       Shift: TShiftState; X, Y: Integer);
     procedure Button3Click(Sender: TObject);
@@ -53,6 +51,7 @@ type
     procedure ClearFilterAndNum;
     procedure SaveExemptConfig;
     procedure LoadExemptConfig;
+    procedure WMDelayedEnableTimers(var Message: TMessage);
     { Private declarations }
   public
     { Public declarations }
@@ -101,29 +100,48 @@ begin
 
   pgc1.ActivePage := TabSheet1;
 
+  // 初始化默认值
+  ForderExcelDirectory := ExtractFilePath(ParamStr(0));
+  FSpecIDColumn := -1;
+  FRowHeights := 0;
+
   // 获取当前可执行文件所在的文件夹路径
   FilePath := ExtractFilePath(ParamStr(0)) + 'goods.xlsx';
 
   // 检查文件是否存在
   if FileExists(FilePath) then
   begin
-    // 加载Excel文件到StringGrid
-    LoadExcelToGrid(FilePath, StringGrid1);
+    try
+      // 加载Excel文件到StringGrid
+      LoadExcelToGrid(FilePath, StringGrid1);
+    except
+      on E: Exception do
+        ShowMessage('加载 goods.xlsx 文件时发生错误：' + E.Message);
+    end;
   end
   else
   begin
     ShowMessage('文件 goods.xlsx 未找到！');
   end;
-  StringGrid1.Options := StringGrid1.Options + [goEditing];
-  StringGrid1.FixedCols := 0;
-  FRowHeights := StringGrid1.DefaultRowHeight;
+
+  if StringGrid1.RowCount > 0 then
+  begin
+    StringGrid1.Options := StringGrid1.Options + [goEditing];
+    StringGrid1.FixedCols := 0;
+    FRowHeights := StringGrid1.DefaultRowHeight;
+  end;
 
   // 加载免打配置
-  LoadExemptConfig;
+  try
+    LoadExemptConfig;
+  except
+    on E: Exception do
+      ShowMessage('加载免打配置时发生错误：' + E.Message);
+  end;
 
   FilePath := ExtractFilePath(ParamStr(0)) + 'config.json';
 
-  //但当前目录读取congfig.json
+  //从当前目录读取config.json
   if FileExists(FilePath) then
   begin
     try
@@ -133,8 +151,25 @@ begin
         ConfigJSON := TJSONObject.ParseJSONValue(JSONString.Text) as TJSONObject;
         if Assigned(ConfigJSON) then
         begin
-          if ConfigJSON.TryGetValue('orderExcelDirectory', ForderExcelDirectory) then
-            ; //ShowMessage('应用程序名称: ' + ForderExcelDirectory);
+          try
+            if not ConfigJSON.TryGetValue('orderExcelDirectory', ForderExcelDirectory) then
+              ForderExcelDirectory := ExtractFilePath(ParamStr(0))
+            else
+            begin
+              // 转换路径中的斜杠为反斜杠（修复路径格式问题）
+              ForderExcelDirectory := StringReplace(ForderExcelDirectory, '/', '\', [rfReplaceAll]);
+              // 确保路径末尾有分隔符
+              ForderExcelDirectory := IncludeTrailingPathDelimiter(ForderExcelDirectory);
+              // 验证路径是否存在
+              if not DirectoryExists(ForderExcelDirectory) then
+              begin
+                ShowMessage('配置的路径不存在：' + ForderExcelDirectory + '，将使用默认路径');
+                ForderExcelDirectory := ExtractFilePath(ParamStr(0));
+              end;
+            end;
+          finally
+            ConfigJSON.Free;
+          end;
         end
         else
         begin
@@ -150,7 +185,9 @@ begin
   end
   else
   begin
-    ShowMessage('文件 config.json 未找到！');
+    // 使用默认路径（程序所在目录）
+    ForderExcelDirectory := ExtractFilePath(ParamStr(0));
+    ShowMessage('文件 config.json 未找到！将使用默认路径：' + ForderExcelDirectory);
   end;
 
 
@@ -162,13 +199,15 @@ begin
 
 end;
 
-
-
 procedure TForm1.FormShow(Sender: TObject);
 begin
- LabeledEdit1.SetFocus;
- Timer1.Enabled := True;
- Timer2.Enabled := True;
+  LabeledEdit1.SetFocus;
+  PostMessage(Self.Handle, WM_USER + 1, 0, 0);
+end;
+
+procedure TForm1.WMDelayedEnableTimers(var Message: TMessage);
+begin
+  Timer1.Enabled := True;
 end;
 
 procedure TForm1.LabeledEdit1Change(Sender: TObject);
@@ -209,6 +248,7 @@ procedure TForm1.LoadExcelToGrid(const FileName: string; StringGrid: TStringGrid
 var
   ExcelApp, Workbook, Sheet: Variant;
   RowCount, ColCount, i, j: Integer;
+  CellValue: Variant;
 begin
   // 初始化Excel应用程序
   ExcelApp := CreateOleObject('Excel.Application');
@@ -226,6 +266,10 @@ begin
       RowCount := Sheet.UsedRange.Rows.Count;
       ColCount := Sheet.UsedRange.Columns.Count;
 
+      // 确保至少有一行一列
+      if RowCount < 1 then RowCount := 1;
+      if ColCount < 1 then ColCount := 1;
+
       // 设置StringGrid的行数和列数
       StringGrid.RowCount := RowCount; // 不需要额外行，因为列名已经在Excel中
       StringGrid.ColCount := ColCount + 2; // +2 用于新增的“数量”列和“免打”列
@@ -236,10 +280,18 @@ begin
       FSpecIDColumn := -1; // 初始化规格ID列索引
       for j := 2 to ColCount + 1 do
       begin
-        StringGrid.Cells[j, 0] := Sheet.Cells[1, j - 1].Text; // Excel中的列名
-        // 查找规格ID列
-        if CompareText(StringGrid.Cells[j, 0], '规格ID') = 0 then
-          FSpecIDColumn := j;
+        try
+          CellValue := Sheet.Cells[1, j - 1].Text;
+          if not VarIsNull(CellValue) and not VarIsEmpty(CellValue) then
+            StringGrid.Cells[j, 0] := CellValue
+          else
+            StringGrid.Cells[j, 0] := '';
+          // 查找规格ID列
+          if CompareText(StringGrid.Cells[j, 0], '规格ID') = 0 then
+            FSpecIDColumn := j;
+        except
+          StringGrid.Cells[j, 0] := '';
+        end;
       end;
 
       // 加载Excel数据到StringGrid（从第二行开始）
@@ -253,7 +305,15 @@ begin
         // 加载Excel数据
         for j := 2 to ColCount + 1 do
         begin
-          StringGrid.Cells[j, i - 1] := Sheet.Cells[i, j - 1].Text;
+          try
+            CellValue := Sheet.Cells[i, j - 1].Text;
+            if not VarIsNull(CellValue) and not VarIsEmpty(CellValue) then
+              StringGrid.Cells[j, i - 1] := CellValue
+            else
+              StringGrid.Cells[j, i - 1] := '';
+          except
+            StringGrid.Cells[j, i - 1] := '';
+          end;
         end;
       end;
     finally
@@ -303,7 +363,8 @@ begin
 
 
   // 设置保存路径
-  SavePath := ForderExcelDirectory + '\' + FormatDateTime('yyyyMMdd_hhnnss', Now) + '手动打单.xlsx';
+  SavePath := IncludeTrailingPathDelimiter(ForderExcelDirectory) +
+              FormatDateTime('yyyyMMdd_hhnnss', Now) + '手动打单.xlsx';
 
   // 保存StringGrid内容到Excel
   SaveGridToExcel(SavePath, StringGrid1);
@@ -322,7 +383,8 @@ begin
     Exit;
 
   // 设置保存路径
-  SavePath := ForderExcelDirectory + '\' + FormatDateTime('yyyyMMdd_hhnnss', Now) + '手动打单.xlsx';
+  SavePath := IncludeTrailingPathDelimiter(ForderExcelDirectory) +
+              FormatDateTime('yyyyMMdd_hhnnss', Now) + '手动打单.xlsx';
   // 保存StringGrid内容到Excel
   SaveGridToExcel(SavePath, StringGrid2);
 end;
@@ -344,7 +406,8 @@ begin
 
 
   // 设置保存路径
-  SavePath := ForderExcelDirectory + '\' + FormatDateTime('yyyyMMdd_hhnnss', Now) + '手动打单.xlsx';
+  SavePath := IncludeTrailingPathDelimiter(ForderExcelDirectory) +
+              FormatDateTime('yyyyMMdd_hhnnss', Now) + '手动打单.xlsx';
   // 保存StringGrid内容到Excel
   SaveGridToExcel(SavePath, StringGrid2);
 end;
@@ -480,6 +543,14 @@ var
   Stream: TMemoryStream;
   Buffer: TBytes;
 begin
+  // 安全检查：确保StringGrid1已初始化且有数据
+  if not Assigned(StringGrid1) or (StringGrid1.RowCount <= 1) then
+    Exit;
+
+  // 检查FSpecIDColumn是否有效
+  if FSpecIDColumn < 0 then
+    Exit;
+
   // 获取配置文件路径
   FilePath := ExtractFilePath(ParamStr(0)) + 'exempt_config.json';
 
@@ -602,7 +673,22 @@ begin
 
       // 保存工作簿
       if ExcelRow > 2 then
-        Workbook.SaveAs(FileName);
+      begin
+        try
+          Workbook.SaveAs(FileName);
+          //ShowMessage('文件已保存到：' + FileName);
+        except
+          on E: Exception do
+          begin
+            ShowMessage('保存文件时发生错误：' + E.Message + #13#10 +
+                        '文件路径：' + FileName);
+          end;
+        end;
+      end
+      else
+      begin
+        //ShowMessage('没有需要保存的数据（数量列中没有大于0的项）');
+      end;
     finally
       // 关闭工作簿
       Workbook.Close(False);
@@ -660,7 +746,6 @@ procedure TForm1.StringGrid2MouseDown(Sender: TObject; Button: TMouseButton;
   Shift: TShiftState; X, Y: Integer);
 var
   Col, Row: Longint;
-  CurrentValue: Integer;
   CellText: string;
   i: Integer;
 begin
@@ -704,6 +789,10 @@ var
   JSONString: TStringList;
   ConfigJSON: TJSONObject;
 begin
+  // 安全检查：确保StringGrid2已初始化
+  if not Assigned(StringGrid2) then
+    Exit;
+
   // 先禁用定时器，避免重入
   Timer1.Enabled := False;
 
@@ -713,30 +802,27 @@ begin
 
     // 检查文件是否存在
     if FileExists(FilePath) then
-      LoadExcelToGrid(FilePath, StringGrid2)
+    begin
+      try
+        LoadExcelToGrid(FilePath, StringGrid2);
+        if StringGrid2.RowCount > 0 then
+        begin
+          StringGrid2.Options := StringGrid2.Options + [goEditing];
+          StringGrid2.FixedCols := 0;
+        end;
+      except
+        on E: Exception do
+          ShowMessage('加载 latest_print_file.xlsx 时发生错误：' + E.Message);
+      end;
+    end
     else
-      ShowMessage('文件 latest_print_file.xlsx 未找到！');
-
-    StringGrid2.Options := StringGrid2.Options + [goEditing];
-    StringGrid2.FixedCols := 0;
-    FRowHeights := StringGrid2.DefaultRowHeight;
+    begin
+      // 文件不存在时不显示消息，避免每次定时器触发都弹出
+      // ShowMessage('文件 latest_print_file.xlsx 未找到！');
+    end;
   finally
     // 确保定时器重新开启，以便下次自动加载
     //Timer1.Enabled := True;
-  end;
-end;
-
-procedure TForm1.Timer2Timer(Sender: TObject);
-begin
-  // 先禁用定时器，避免重入
-  Timer2.Enabled := False;
-
-  try
-    // 刷新免打配置
-    LoadExemptConfig;
-  finally
-    // 确保定时器重新开启，以便下次自动加载
-    Timer2.Enabled := True;
   end;
 end;
 
