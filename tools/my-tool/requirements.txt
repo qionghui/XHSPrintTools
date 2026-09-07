@@ -1,0 +1,23 @@
+# ============================================================
+# my-tool — 货品清单小票 / 依赖清单
+# ============================================================
+# 安装命令:
+#   pip install -r requirements.txt
+#
+# 启用虚拟环境（推荐）:
+#   python -m venv .venv
+#   .venv\Scripts\activate       (Windows)
+#   source .venv/bin/activate    (Linux/Mac)
+
+# ---------- 数据处理 ----------
+pandas>=2.0.0              # Excel/CSV 数据处理
+openpyxl>=3.1.0            # 读写 .xlsx 文件（pandas 引擎依赖）
+
+# ---------- 打印（DTPWeb 德途打印助手）----------
+dtpweb>=1.0.0              # DTPWeb 打印 SDK（与主项目 ddPrint.py 相同）
+
+# ---------- 配置 / 环境变量（可选）----------
+# python-dotenv>=1.0.0       # 加载 .env 文件
+
+# ---------- 命令行参数 ----------
+# argparse（Python 标准库，无需安装）

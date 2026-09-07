@@ -51,6 +51,7 @@ type
     procedure ClearFilterAndNum;
     procedure SaveExemptConfig;
     procedure LoadExemptConfig;
+    procedure LoadGoodsConfig;
     procedure WMDelayedEnableTimers(var Message: TMessage);
     { Private declarations }
   public
@@ -58,13 +59,10 @@ type
 
   end;
 
-Const
-  goodlist: array[0..13] of string = ('莲子', '银耳', '百合', '金线莲','桂圆', '姬松茸', '龙须草', '五指毛桃', '鹿茸菇', '红枣',
-    '雪梨干', '羊肚菌', '风鼓草', '铁棍山药');
-  goodpylist: array[0..13] of string = ('lz', 'ye', 'bh', 'jxl','gy','jsl','lxc','wzmt','llg','hz','xlg','ydj','fgc','sy');
-
 var
   Form1: TForm1;
+  goodlist: array of string;
+  goodpylist: array of string;
 
 
 implementation
@@ -190,7 +188,13 @@ begin
     ShowMessage('文件 config.json 未找到！将使用默认路径：' + ForderExcelDirectory);
   end;
 
-
+  // 加载商品配置（商品名与拼音映射）
+  try
+    LoadGoodsConfig;
+  except
+    on E: Exception do
+      ShowMessage('加载商品配置时发生错误：' + E.Message);
+  end;
 
   for I := Low(goodlist) to High(goodlist) do
   begin
@@ -626,6 +630,54 @@ begin
   except
     on E: Exception do
       ShowMessage('读取免打配置文件时发生错误：' + E.Message);
+  end;
+end;
+
+procedure TForm1.LoadGoodsConfig;
+var
+  FilePath: string;
+  JSONString: TStringList;
+  ConfigJSON: TJSONObject;
+  i: Integer;
+  Pair: TJSONPair;
+begin
+  // 初始化为空数组
+  SetLength(goodlist, 0);
+  SetLength(goodpylist, 0);
+
+  FilePath := ExtractFilePath(ParamStr(0)) + 'goods_config.json';
+
+  if not FileExists(FilePath) then
+  begin
+    ShowMessage('文件 goods_config.json 未找到！');
+    Exit;
+  end;
+
+  JSONString := TStringList.Create;
+  try
+    JSONString.LoadFromFile(FilePath, TEncoding.UTF8);
+    ConfigJSON := TJSONObject.ParseJSONValue(JSONString.Text) as TJSONObject;
+    if Assigned(ConfigJSON) then
+    begin
+      try
+        SetLength(goodlist, ConfigJSON.Count);
+        SetLength(goodpylist, ConfigJSON.Count);
+        for i := 0 to ConfigJSON.Count - 1 do
+        begin
+          Pair := ConfigJSON.Pairs[i];
+          goodlist[i] := Pair.JsonString.Value;
+          goodpylist[i] := Pair.JsonValue.Value;
+        end;
+      finally
+        ConfigJSON.Free;
+      end;
+    end
+    else
+    begin
+      ShowMessage('goods_config.json 文件内容无效！');
+    end;
+  finally
+    JSONString.Free;
   end;
 end;
 

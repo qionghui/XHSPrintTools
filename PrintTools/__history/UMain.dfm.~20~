@@ -2,8 +2,8 @@ object Form1: TForm1
   Left = 0
   Top = 0
   Caption = #26631#31614#25171#21360
-  ClientHeight = 636
-  ClientWidth = 879
+  ClientHeight = 637
+  ClientWidth = 883
   Color = clBtnFace
   Font.Charset = DEFAULT_CHARSET
   Font.Color = clWindowText
@@ -17,7 +17,7 @@ object Form1: TForm1
   object Panel1: TPanel
     Left = 0
     Top = 0
-    Width = 879
+    Width = 883
     Height = 105
     Margins.Left = 2
     Margins.Top = 2
@@ -25,6 +25,7 @@ object Form1: TForm1
     Margins.Bottom = 2
     Align = alTop
     TabOrder = 0
+    ExplicitWidth = 879
     object Panel3: TPanel
       Left = 1
       Top = 1
@@ -102,14 +103,15 @@ object Form1: TForm1
         TabOrder = 0
         OnClick = CheckListBox1Click
         OnClickCheck = CheckListBox1ClickCheck
+        ExplicitWidth = 875
       end
     end
   end
   object Panel2: TPanel
     Left = 0
     Top = 105
-    Width = 879
-    Height = 531
+    Width = 883
+    Height = 532
     Margins.Left = 2
     Margins.Top = 2
     Margins.Right = 2
@@ -117,6 +119,8 @@ object Form1: TForm1
     Align = alClient
     Caption = 'Panel2'
     TabOrder = 1
+    ExplicitWidth = 879
+    ExplicitHeight = 531
     object pgc1: TPageControl
       Left = 1
       Top = 1
