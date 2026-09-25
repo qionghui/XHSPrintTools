@@ -4,10 +4,11 @@ import pandas as pd
 import sys
 import shutil
 import time
-import ddPrint
+import ddprint
 import datetime
 
 import psutil
+import paths
 
 config = []
 GoodsConfig = None
@@ -15,7 +16,7 @@ GoodsConfig = None
 diy_date = ""
 
 
-lock_file = 'lock.txt'
+lock_file = paths.LOCK_FILE
 
 
 #!/usr/bin/env python3
@@ -53,7 +54,7 @@ def remove_lock_file(lock_file_path):
 
 
 
-def read_config(file_path='config.json'):
+def read_config(file_path=paths.CONFIG_FILE):
     try:
         with open(file_path, 'r', encoding='utf-8') as file:
             config_dict = json.load(file)
@@ -337,7 +338,7 @@ def process_printing(rows, config, diy_date):
                     info['text'].append({'text': '温馨提示：本店所售农产品属于初级农产品，代客分装，散装称重，包装是为了方便运输赠送。', 'x': 2, 'y': old_y_pos})
 
 
-        ddPrint.print_text(info)
+        ddprint.print_text(info)
 
 def DoXHS(AExcelFile, order_excel_directory):
     def ggid_field(row):
@@ -354,13 +355,12 @@ def DoXHS(AExcelFile, order_excel_directory):
     # 读取免打配置文件
     def read_exempt_config():
         try:
-            print(f"当前工作目录: {os.getcwd()}")
-            config_path = os.path.join(os.getcwd(), 'exempt_config.json')
+            config_path = paths.EXEMPT_CONFIG
             print(f"配置文件路径: {config_path}")
             print(f"配置文件是否存在: {os.path.exists(config_path)}")
-            
+
             if os.path.exists(config_path):
-                with open('exempt_config.json', 'r', encoding='utf-8-sig') as f:
+                with open(config_path, 'r', encoding='utf-8-sig') as f:
                     content = f.read()
                     print(f"配置文件原始内容: {content}")
                     config = json.loads(content)
@@ -384,7 +384,7 @@ def DoXHS(AExcelFile, order_excel_directory):
         try:
             # 过滤掉值为0或负数的项
             filtered_config = {k: v for k, v in exempt_config.items() if v > 0}
-            with open('exempt_config.json', 'w', encoding='utf-8-sig') as f:
+            with open(paths.EXEMPT_CONFIG, 'w', encoding='utf-8-sig') as f:
                 json.dump(filtered_config, f, indent=2, ensure_ascii=False)
             print(f"保存免打配置: {filtered_config}")
         except Exception as e:
@@ -504,7 +504,7 @@ def DoXHS(AExcelFile, order_excel_directory):
             if not found:
                 print(f'{guige_id} 的 SKU 名称 "{row["SKU名称"]}" 没有在 GoodsConfig 中找到')
                 #使用默认软件打开GoodsConfig文件
-                os.startfile("goods.xlsx")
+                os.startfile(paths.GOODS_XLSX)
         
         return True, rows, exempt_config
 
@@ -544,11 +544,11 @@ def DoXHS(AExcelFile, order_excel_directory):
     rows = sort_rows(rows)
 
     # 保存Excel文件函数
-    def save_to_excel(rows, file_path='./latest_print_file.xlsx'):
+    def save_to_excel(rows, file_path=paths.LATEST_PRINT):
         """
         将商品列表保存为Excel文件
         rows: 商品列表
-        file_path: 保存路径，默认为'./latest_print_file.xlsx'
+        file_path: 保存路径，默认为 paths.LATEST_PRINT（runtime/latest_print_file.xlsx）
         """
         rows_df = pd.DataFrame(rows)
         rows_df.to_excel(file_path, index=False)
@@ -571,7 +571,7 @@ def main():
 
     config = read_config()
     #此次修改为从goods.xlsx读取配置
-    GoodsConfig = pd.read_excel("goods.xlsx")
+    GoodsConfig = pd.read_excel(paths.GOODS_XLSX)
 
     if config is None:
         print("Failed to load config.")
@@ -584,9 +584,8 @@ def main():
     print_excel_directory = config['printExcelDirectory']
     
  
-    script_dir = os.path.dirname(os.path.abspath(__file__))  # 获取当前脚本所在目录
-    backup_directory = os.path.join(script_dir, 'bak')
-    os.makedirs(backup_directory, exist_ok=True)  # 如果目录不存在则创建
+    paths.ensure_runtime_dirs()  # 确保 runtime/ 与 runtime/bak/ 存在
+    backup_directory = paths.BAK_DIR
 
     
     # 遍历目录
@@ -610,7 +609,7 @@ def main():
 
 
 if __name__ == "__main__":
-    lock_file_path = 'application.lock'
+    lock_file_path = paths.LOCK_FILE
 
     check_lock_file(lock_file_path)
     create_lock_file(lock_file_path)

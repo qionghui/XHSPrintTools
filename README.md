@@ -1,8 +1,8 @@
-# Bill4Print 项目说明文档
+# XHSPrintTools 项目说明文档
 
 ## 1. 项目概述
 
-Bill4Print 是一个用于打印商品标签的自动化工具，主要用于处理电商订单中的商品信息，生成并打印标准化的商品标签。该工具特别适用于农产品、干货等需要分装销售的场景，能够根据订单信息自动生成包含成分、规格、净重、保质期、产地、等级、储存方式等信息的标签。
+XHSPrintTools 是一个用于打印商品标签的自动化工具，主要用于处理电商订单中的商品信息，生成并打印标准化的商品标签。该工具特别适用于农产品、干货等需要分装销售的场景，能够根据订单信息自动生成包含成分、规格、净重、保质期、产地、等级、储存方式等信息的标签。
 
 ### 主要功能：
 - 自动读取 Excel 订单文件
@@ -16,19 +16,32 @@ Bill4Print 是一个用于打印商品标签的自动化工具，主要用于处
 ## 2. 目录结构
 
 ```
-Bill4Print/
-├── main.py              # 主脚本文件
-├── config.json          # 配置文件
-├── goods.xlsx           # 商品配置文件
-├── ddPrint.py           # 打印模块
-├── bak/                 # 备份目录，存储处理过的订单文件
-├── PrintTools/          # 打印工具目录（Delphi项目）
-│   ├── PrintTools.dpr
-│   ├── PrintTools.dproj
-│   ├── PrintTools.res
-│   ├── UMain.dfm
-│   └── UMain.pas
-└── PrintTools.exe       # 打印工具可执行文件
+XHSPrintTools/
+├── src/                 # Python 源码
+│   ├── main.py          # 桌面端主脚本（订单处理 + 标签生成）
+│   ├── server.py        # 移动端标签打印服务（HTTP）
+│   ├── ddprint.py       # 打印模块（DTPWeb 封装）
+│   └── paths.py         # 共享路径解析（项目根派生）
+├── config/              # 配置文件
+│   ├── config.json
+│   ├── goods_config.json
+│   └── exempt_config.json
+├── data/                # 主数据
+│   └── goods.xlsx       # 商品配置（唯一主数据）
+├── delphi/              # Delphi 遗留源码（冻结，不再维护）
+├── vendor/dtpweb/       # DTPWeb 打印 SDK（whl + 文档 + demo）
+├── tools/               # 独立小工具（与主业务隔离）
+│   ├── goods-list-tool/
+│   └── postage-calc/
+├── scripts/             # 启动脚本
+│   ├── print.bat
+│   └── print-custom-date.bat
+├── tests/               # 测试
+│   └── test_label.py
+├── runtime/             # 运行时产物（已 gitignore：锁文件/最新打印/订单备份）
+├── dist/                # 编译输出（已 gitignore）
+├── main.spec            # PyInstaller 打包配置
+└── README.md
 ```
 
 ## 3. 系统要求
@@ -101,8 +114,9 @@ Bill4Print/
 
 2. **运行程序**：
    ```bash
-   python main.py
+   python src\main.py
    ```
+   或直接双击 `scripts\print.bat`（同时启动移动端服务 `server.py`）。
 
 3. **程序执行流程**：
    - 检查并创建锁文件，防止多实例运行
@@ -119,8 +133,9 @@ Bill4Print/
 如需指定打印日期（而非使用当前日期），可使用 `--diy_date` 参数运行程序：
 
 ```bash
-python main.py --diy_date
+python src\main.py --diy_date
 ```
+或双击 `scripts\print-custom-date.bat`。
 
 运行后，程序会提示输入自定义日期，格式为 YYYY-MM-DD：
 
@@ -138,8 +153,8 @@ python main.py --diy_date
 3. **处理组合商品**：如果商品有子项，根据子项配置生成相应数量的标签
 4. **排序标签**：按成分、规格、净重、等级排序标签
 5. **生成标签数据**：构建包含商品详细信息的标签数据
-6. **打印标签**：调用 ddPrint 模块打印标签
-7. **备份订单**：将处理过的订单文件备份到 bak 目录
+6. **打印标签**：调用 ddprint 模块打印标签
+7. **备份订单**：将处理过的订单文件备份到 runtime/bak 目录
 
 ### 7.2 标签格式
 
@@ -183,8 +198,8 @@ python main.py --diy_date
 ### 8.2 日志和调试
 
 - 程序运行时会在控制台输出处理过程和错误信息
-- 处理过的订单文件会备份到 bak 目录，可用于排查问题
-- 每次打印的标签数据会保存到 `latest_print_file.xlsx` 文件中，可用于查看打印内容
+- 处理过的订单文件会备份到 runtime/bak 目录，可用于排查问题
+- 每次打印的标签数据会保存到 `runtime/latest_print_file.xlsx` 文件中，可用于查看打印内容
 
 ## 9. 代码结构
 
@@ -221,7 +236,7 @@ python main.py --diy_date
    - 确保打印机已正确连接并安装驱动
    - 调整打印机设置，确保标签尺寸正确（50mm × 40mm）
 
-4. **备份文件**：处理过的订单文件会被备份到 bak 目录，建议定期清理该目录，避免占用过多磁盘空间
+4. **备份文件**：处理过的订单文件会被备份到 runtime/bak 目录，建议定期清理该目录，避免占用过多磁盘空间
 
 5. **多实例运行**：程序会创建锁文件防止多实例运行，如需同时运行多个实例，需修改锁文件路径
 
@@ -243,8 +258,8 @@ python main.py --diy_date
 
 ### 11.3 程序更新
 
-当需要修改程序功能时，需要编辑 main.py 文件：
-1. 打开 main.py 文件
+当需要修改程序功能时，需要编辑 src/main.py 文件：
+1. 打开 src/main.py 文件
 2. 修改相应的代码
 3. 保存文件
 

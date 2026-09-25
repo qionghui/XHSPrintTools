@@ -18,8 +18,10 @@ try:
 except ImportError:
     sys.exit(1)
 
+import paths
+
 PORT = 8000
-BASE_DIR = os.path.dirname(os.path.abspath(__file__))
+BASE_DIR = paths.PROJECT_ROOT
 
 
 # ==================== 工具函数 ====================
@@ -52,7 +54,7 @@ def try_num(s):
 
 def read_config():
     try:
-        with open(os.path.join(BASE_DIR, 'config.json'), 'r', encoding='utf-8') as f:
+        with open(paths.CONFIG_FILE, 'r', encoding='utf-8') as f:
             return json.load(f)
     except Exception:
         return {}
@@ -93,7 +95,7 @@ def save_excel(filepath, headers, rows):
 
 
 def load_exempt():
-    path = os.path.join(BASE_DIR, 'exempt_config.json')
+    path = paths.EXEMPT_CONFIG
     if not os.path.exists(path):
         return {}
     try:
@@ -104,7 +106,7 @@ def load_exempt():
 
 
 def save_exempt_data(data):
-    path = os.path.join(BASE_DIR, 'exempt_config.json')
+    path = paths.EXEMPT_CONFIG
     filtered = {k: v for k, v in data.items() if v and v > 0}
     with open(path, 'w', encoding='utf-8-sig') as f:
         json.dump(filtered, f, ensure_ascii=False, indent=2)
@@ -495,21 +497,21 @@ class Handler(http.server.BaseHTTPRequestHandler):
         if path in ('/', '/index.html'):
             self._send_html(HTML_PAGE)
         elif path == '/api/goods':
-            result = load_excel(os.path.join(BASE_DIR, 'goods.xlsx'))
+            result = load_excel(paths.GOODS_XLSX)
             if result is None:
                 self._send_json({'error': 'goods.xlsx not found'})
             else:
                 self._send_json({'headers': result[0], 'rows': result[1]})
         elif path == '/api/goods_config':
             try:
-                with open(os.path.join(BASE_DIR, 'goods_config.json'), 'r', encoding='utf-8') as f:
+                with open(paths.GOODS_CONFIG, 'r', encoding='utf-8') as f:
                     self._send_json(json.load(f))
             except Exception:
                 self._send_json({})
         elif path == '/api/exempt':
             self._send_json(load_exempt())
         elif path == '/api/latest_print':
-            result = load_excel(os.path.join(BASE_DIR, 'latest_print_file.xlsx'))
+            result = load_excel(paths.LATEST_PRINT)
             if result is None:
                 self._send_json({'error': 'no file'})
             else:

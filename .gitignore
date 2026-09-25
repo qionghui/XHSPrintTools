@@ -1,1 +1,34 @@
+# Python
+__pycache__/
+*.pyc
+*.pyo
+
+# 运行时产物（锁文件、最新打印快照、订单备份）
+runtime/
+application.lock
+latest_print_file.xlsx
 bak/
+
+# 编译输出
+dist/
+*.exe
+*.spec.bak
+
+# Excel 锁文件
+~$*
+
+# Delphi 构建产物
+delphi/__history/
+delphi/__recovery/
+delphi/Win32/
+delphi/*.dcu
+delphi/*.identcache
+delphi/*.dproj.local
+delphi/*.local
+delphi/*.res
+
+# 临时/无关
+tmp.py
+
+# Trae 规划/工具产物
+.trae/

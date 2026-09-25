@@ -1,4 +1,4 @@
-# my-tool 局部规则 — 货品清单小票
+# goods-list-tool 局部规则 — 货品清单小票
 
 > ## ⚠️ 隔离边界声明
 > 本工具独立于 XHSPrintTools 主业务（商品标签打印）。
@@ -18,20 +18,20 @@
 货品清单小票生成工具。读取工程目录下的 Excel 文件（物品、重量、价格），
 通过 DTPWeb 打印助手逐行打印货品清单小票，支持自动分页。
 
-> 借鉴主项目 `ddPrint.py` 的 DTPWeb 打印方式，但逻辑独立、排版针对清单场景重新设计。
+> 借鉴主项目 `ddprint.py` 的 DTPWeb 打印方式，但逻辑独立、排版针对清单场景重新设计。
 
 ## 技术栈
 
 - **语言**: Python 3.x
 - **运行平台**: Windows
-- **打印库**: `dtpweb`（德途 DTPWeb 打印助手，与主项目 ddPrint.py 相同）
+- **打印库**: `dtpweb`（德途 DTPWeb 打印助手，与主项目 ddprint.py 相同）
 - **数据读取**: `pandas` + `openpyxl`
 - **依赖**: 在 `requirements.txt` 中声明，按需安装
 
 ## 目录结构
 
 ```
-tools/my-tool/
+tools/goods-list-tool/
 ├── AGENTS.md          # 本文件（独立 rules）
 ├── main.py            # 主脚本入口（CLI 参数、Excel 读取、编排）
 ├── printer.py         # DTPWeb 打印封装（多页分页打印）
@@ -271,7 +271,7 @@ DATA_FILE = os.path.join(os.path.dirname(__file__), 'data', 'receipt.json')
 ## 运行与调试
 
 ```bash
-cd tools/my-tool
+cd tools/goods-list-tool
 pip install -r requirements.txt
 python main.py
 ```
@@ -281,9 +281,9 @@ python main.py
 本工具与主业务（XHSPrintTools 商品标签打印）**逻辑独立**：
 
 ### 🚫 禁止
-- 不要 import 或引用主业务 `PrintTools/` 下的 Delphi 代码
-- 不要修改主业务的 `goods.xlsx`、`config.json`、`exempt_config.json`
-- 不要在主业务 `bak/` 目录写入文件
+- 不要 import 或引用主业务 `delphi/` 下的 Delphi 代码
+- 不要修改主业务的 `data/goods.xlsx`、`config/config.json`、`config/exempt_config.json`
+- 不要在主业务 `runtime/bak/` 目录写入文件
 - 不要复用主业务的标签格式规则（50mm×40mm 标签等）
 
 ### ✅ 允许

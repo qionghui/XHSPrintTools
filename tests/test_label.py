@@ -3,8 +3,10 @@ import pandas as pd
 import sys
 import os
 
-# 添加当前目录到系统路径
-sys.path.append(os.path.dirname(os.path.abspath(__file__)))
+# 让 src/ 可被 import（main.py / ddprint.py / paths.py 均位于 src/）
+_HERE = os.path.dirname(os.path.abspath(__file__))
+sys.path.append(os.path.join(_HERE, '..', 'src'))
+import paths
 
 # 模拟配置文件内容
 test_config = {
@@ -237,7 +239,7 @@ def test_config_loading():
     
     # 测试配置文件读取
     try:
-        with open('config.json', 'r', encoding='utf-8') as f:
+        with open(paths.CONFIG_FILE, 'r', encoding='utf-8') as f:
             config = json.load(f)
         print("✓ 配置文件读取成功")
         print(f"  标签类型: {config.get('labelType', 'new')}")

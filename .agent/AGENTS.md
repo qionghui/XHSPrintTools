@@ -6,13 +6,12 @@ XHSPrintTools 是一个用于打印商品标签的自动化工具，主要用于
 
 ## 技术栈
 
-- **编程语言**: Delphi / Object Pascal (主要) + Python (辅助脚本)
-- **开发环境**: Delphi / RAD Studio (VCL框架)
-- **数据格式**: JSON, Excel (.xlsx, .xls)
+- **编程语言**: Python（主要） + Delphi / Object Pascal（遗留，已冻结，不再维护）
 - **运行平台**: Windows
+- **数据格式**: JSON, Excel (.xlsx, .xls)
 - **核心依赖**:
-  - Delphi: ComObj (Excel OLE自动化), System.JSON
-  - Python: pandas, openpyxl, psutil
+  - Python: pandas, openpyxl, psutil, dtpweb（打印 SDK，见 vendor/dtpweb/）
+  - Delphi: ComObj (Excel OLE自动化), System.JSON（仅 delphi/ 遗留源码）
 
 ## 项目结构
 
@@ -24,33 +23,64 @@ XHSPrintTools/
 │   ├── skills/              # Agent Skills（可复用技能）
 │   ├── spec/                # 项目规格文档
 │   └── wiki/                # 项目知识库
-├── PrintTools/              # Delphi 项目源码
-│   ├── PrintTools.dpr       # 项目主文件
-│   ├── PrintTools.dproj     # Delphi 项目配置
-│   ├── UMain.pas            # 主窗体单元
-│   ├── UMain.dfm            # 主窗体布局
-│   └── goods.xlsx           # 商品配置文件
-├── tools/                   # 独立小工具目录（各有自己的 AGENTS.md）
-│   └── my-tool/             # 货品清单小票（Python，独立 rules）
-│       └── AGENTS.md        # 该工具局部规则（与主业务隔离）
-├── bak/                     # 订单文件备份目录
-├── PrintTools.exe           # 编译输出的可执行文件
-├── README.md                # 项目说明文档（面向人类）
-└── application.lock         # 程序运行锁文件
+├── src/                     # Python 源码（主业务）
+│   ├── main.py              # 桌面端主脚本（订单处理 + 标签生成）
+│   ├── server.py            # 移动端标签打印服务（HTTP）
+│   ├── ddprint.py           # 打印模块（DTPWeb 封装）
+│   └── paths.py             # 共享路径解析（基于 __file__ 派生项目根）
+├── config/                  # 配置文件（受版本控制）
+│   ├── config.json
+│   ├── goods_config.json
+│   └── exempt_config.json
+├── data/                    # 主数据（受版本控制）
+│   └── goods.xlsx           # 商品配置（唯一主数据）
+├── delphi/                  # Delphi 遗留源码（冻结，不再维护）
+├── vendor/dtpweb/           # DTPWeb 打印 SDK（whl + 文档 + demo）
+├── tools/                   # 独立小工具目录（各有自己的 AGENTS.md，与主业务隔离）
+│   ├── goods-list-tool/     # 货品清单小票（Python，独立 rules）
+│   └── postage-calc/        # 邮费计算（Python，独立）
+├── scripts/                 # 启动脚本
+│   ├── print.bat            # 启动桌面端 + 移动端服务
+│   └── print-custom-date.bat
+├── tests/                   # 测试
+│   └── test_label.py
+├── runtime/                 # 运行时产物（已 gitignore）
+│   ├── application.lock     # 程序运行锁文件
+│   ├── latest_print_file.xlsx
+│   └── bak/                 # 订单文件备份目录
+├── dist/                    # 编译输出（已 gitignore，如 PrintTools.exe / main.exe）
+├── main.spec                # PyInstaller 打包配置
+└── README.md                # 项目说明文档（面向人类）
 ```
+
+## 路径约定（重要）
+
+所有源码对配置/数据/运行时资源的定位，**统一通过 `src/paths.py`** 派生自 `__file__` 的项目根解析，**不依赖 CWD**。因此：
+- 不要在代码中用裸文件名（`'config.json'`、`'goods.xlsx'`、`'bak'` 等）或 `os.getcwd()`。
+- 新增资源请先在 `src/paths.py` 中定义常量，再在 `main.py`/`server.py` 中引用。
+- 锁文件统一为 `runtime/application.lock`（不要再用 `lock.txt`）。
+- 订单备份目录为 `runtime/bak/`（由 `paths.ensure_runtime_dirs()` 自动创建）。
 
 ## 构建与运行
 
-### Delphi 项目编译
+### Python 主程序（主要）
 
-1. 使用 Delphi / RAD Studio 打开 `PrintTools/PrintTools.dproj`
+1. 安装依赖：`pip install pandas openpyxl psutil`，并安装打印 SDK：`pip install vendor/dtpweb/dtpweb-2.5.20250212-py3-none-any.whl`
+2. 运行桌面端：`python src/main.py`（或双击 `scripts/print.bat`，同时启动移动端 `server.py`）
+3. 自定义打印日期：`python src/main.py --diy_date`（或 `scripts/print-custom-date.bat`）
+4. 运行测试：`python tests/test_label.py`
+5. PyInstaller 打包：`pyinstaller main.spec`（产物 `dist/main.exe`）
+
+### Delphi 遗留编译（仅维护参考，不再更新）
+
+1. 使用 Delphi / RAD Studio 打开 `delphi/PrintTools.dproj`
 2. 按 `F9` 或 `Ctrl+F9` 编译项目
-3. 输出文件: `PrintTools.exe` 位于项目根目录
+3. 输出文件：`delphi/Win32/Debug/PrintTools.exe`（产物不入库）
 
 ### 运行检查清单
 
-- 确保 `config.json` 存在且配置正确
-- 确保 `goods.xlsx` 存在于可执行文件同目录
+- 确保 `config/config.json` 存在且配置正确
+- 确保 `data/goods.xlsx` 存在
 - 确保打印机已连接并配置好标签尺寸 (50mm × 40mm)
 
 ## 代码约定
@@ -121,22 +151,23 @@ end;
 
 ### 🚫 禁止操作
 
-- **严禁**修改 `bak/` 目录下的备份文件
-- **严禁**删除 `application.lock` 文件（除非确认程序已退出）
+- **严禁**修改 `runtime/bak/` 目录下的备份文件
+- **严禁**删除 `runtime/application.lock` 文件（除非确认程序已退出）
 - **严禁**在代码中硬编码密码、API密钥等敏感信息
-- **严禁**修改 `goods.xlsx` 中的规格ID字段（业务主键）
+- **严禁**修改 `data/goods.xlsx` 中的规格ID字段（业务主键）
 
 ### ⚠️ 谨慎操作
 
-- 修改 `config.json` 前先备份
+- 修改 `config/config.json` 前先备份
 - 修改标签格式前需与业务方确认
-- 修改 UMain.pas 中的 Excel 操作逻辑后必须充分测试
+- 修改 `src/main.py` 的订单/打印核心逻辑后必须充分测试
+- 修改 `delphi/UMain.pas` 中的 Excel 操作逻辑后必须充分测试（遗留代码）
 
 ### ✅ 推荐操作
 
-- 每次修改后在 Delphi IDE 中编译确认无错误
+- Python 改动后运行 `python tests/test_label.py` 验证标签组装逻辑
 - 修改核心逻辑前先备份相关文件
-- 新增功能优先考虑向后兼容
+- 新增资源路径一律经 `src/paths.py` 定义，不裸写文件名
 
 ## 子目录独立 Rules（tools/）
 
@@ -154,5 +185,5 @@ Agent 在 `tools/{tool}/` 下工作时，rules 按以下优先级叠加（后者
 
 - 子目录的 `AGENTS.md` 顶部声明**隔离边界**：明确哪些主业务规则不适用
 - 通用安全规则（不硬编码密钥、不提交敏感信息）在所有层级始终生效
-- 小工具不得引用/修改主业务代码与数据（`PrintTools/`、`goods.xlsx`、`bak/` 等）
-- 新增小工具时，复制 `tools/my-tool/` 作为模板，修改其 `AGENTS.md` 即可
+- 小工具不得引用/修改主业务代码与数据（`src/`、`data/goods.xlsx`、`runtime/bak/` 等）
+- 新增小工具时，复制 `tools/goods-list-tool/` 作为模板，修改其 `AGENTS.md` 即可
