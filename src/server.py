@@ -138,6 +138,17 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 .chips{display:flex;flex-wrap:wrap;gap:6px;margin-bottom:10px}
 .chip{padding:6px 14px;background:#fff;border:1px solid #ddd;border-radius:20px;font-size:13px;color:#666}
 .chip.active{background:#1677ff;color:#fff;border-color:#1677ff}
+.toggle-row{display:flex;justify-content:flex-end;margin-bottom:8px}
+.switch-label{display:flex;align-items:center;gap:6px;font-size:13px;color:#666;cursor:pointer;user-select:none}
+.switch{position:relative;display:inline-block;width:38px;height:22px}
+.switch input{opacity:0;width:0;height:0}
+.switch-slider{position:absolute;inset:0;background:#ccc;border-radius:22px;transition:.2s}
+.switch-slider:before{content:"";position:absolute;width:18px;height:18px;left:2px;top:2px;background:#fff;border-radius:50%;transition:.2s}
+.switch input:checked + .switch-slider{background:#1677ff}
+.switch input:checked + .switch-slider:before{transform:translateX(16px)}
+.sub-filter{margin-bottom:8px}
+.sub-filter-title{font-size:12px;color:#999;margin-bottom:5px}
+.sub-filter .chips{margin-bottom:4px}
 .card{background:#fff;border-radius:8px;padding:12px;margin-bottom:8px;box-shadow:0 1px 3px rgba(0,0,0,.08)}
 .card.marked{background:#f6ffed;border-left:3px solid #52c41a}
 .card-title{font-size:16px;font-weight:600;margin-bottom:2px}
@@ -168,7 +179,20 @@ body{font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',Roboto,sans-serif;b
 
 <div id="tab-manual" class="content">
 <input type="text" id="search" class="search-bar" placeholder="搜索商品..." oninput="onSearch()">
+<div class="toggle-row">
+<label class="switch-label"><span class="switch"><input type="checkbox" id="toggle-children" onchange="onToggleChildren()"><span class="switch-slider"></span></span>显示含子项商品</label>
+</div>
 <div id="chips" class="chips"></div>
+<div id="secondary-filters" style="display:none">
+<div class="sub-filter" id="spec-group" style="display:none">
+<div class="sub-filter-title">规格</div>
+<div id="spec-chips" class="chips"></div>
+</div>
+<div class="sub-filter" id="weight-group" style="display:none">
+<div class="sub-filter-title">重量</div>
+<div id="weight-chips" class="chips"></div>
+</div>
+</div>
 <div id="product-list"><div class="empty">加载中...</div></div>
 </div>
 
@@ -193,7 +217,7 @@ let gHeaders=[], gRows=[], gConfig={}, exemptCfg={};
 let quantities={}, exempts={};
 let lHeaders=[], lRows=[];
 let lMarkStart=-1;
-let activeTab='manual', activeChip=null, searchText='';
+let activeTab='manual', activeChip=null, searchText='', filterSpec='', filterWeight='', showChildren=false;
 let specIdIdx=-1, latestLoaded=false;
 
 // ===== 工具 =====
@@ -227,6 +251,7 @@ async function init(){
       }
     });
     renderChips();
+    renderSecondary();
     renderProducts();
   }catch(e){showToast('加载失败: '+e.message);}
 }
@@ -255,6 +280,7 @@ function toggleChip(name,py){
   document.querySelectorAll('.chip').forEach(c=>{
     c.classList.toggle('active',c.textContent===name&&activeChip===py);
   });
+  resetSecondary();
   renderProducts();
 }
 
@@ -262,6 +288,94 @@ function onSearch(){
   searchText=document.getElementById('search').value;
   activeChip=null;
   document.querySelectorAll('.chip').forEach(c=>c.classList.remove('active'));
+  resetSecondary();
+  renderProducts();
+}
+
+// ===== 次级筛选（规格 / 重量 chip，仅选中大类后显示）=====
+function hasChildren(row){
+  const zi=colIdx(gHeaders,'子项');
+  return zi>=0&&row[zi]&&String(row[zi]).trim()!=='';
+}
+
+// 大类 / 搜索 / 子项开关构成的基础过滤（规格、重量之前）
+function matchBase(row){
+  if(searchText){
+    const m=row.some(v=>v&&String(v).includes(searchText));
+    if(!m) return false;
+  }
+  if(!showChildren&&hasChildren(row)) return false;
+  return true;
+}
+
+// chip 文案去掉“规格：/净重：”前缀，匹配仍用原始值
+function shortLabel(v){
+  return String(v).replace(/^(规格|净重)\s*[:：]\s*/,'').trim();
+}
+
+function buildSubChips(containerId,values,selected,onPick){
+  const box=document.getElementById(containerId);
+  box.innerHTML='';
+  values.forEach(v=>{
+    const d=document.createElement('div');
+    d.className='chip'+(v===selected?' active':'');
+    d.textContent=shortLabel(v);
+    d.onclick=()=>onPick(v);
+    box.appendChild(d);
+  });
+}
+
+// 依据当前大类动态聚合规格/重量候选；整组无候选时隐藏
+function renderSecondary(){
+  const wrap=document.getElementById('secondary-filters');
+  if(!activeChip){
+    wrap.style.display='none';
+    filterSpec='';
+    filterWeight='';
+    return;
+  }
+  const si=colIdx(gHeaders,'规格');
+  const wi=colIdx(gHeaders,'净重');
+  const specs=new Set(), weights=new Set();
+  gRows.forEach(row=>{
+    if(!matchBase(row)) return;
+    if(si>=0&&row[si]) specs.add(row[si]);
+    if(wi>=0&&row[wi]) weights.add(row[wi]);
+  });
+  const specArr=[...specs].sort(), weightArr=[...weights].sort();
+  document.getElementById('spec-group').style.display=specArr.length?'block':'none';
+  document.getElementById('weight-group').style.display=weightArr.length?'block':'none';
+  buildSubChips('spec-chips',specArr,filterSpec,pickSpec);
+  buildSubChips('weight-chips',weightArr,filterWeight,pickWeight);
+  wrap.style.display=(specArr.length||weightArr.length)?'block':'none';
+}
+
+// 大类变化时：原子化清空两个次级选择并按新大类重建
+function resetSecondary(){
+  filterSpec='';
+  filterWeight='';
+  renderSecondary();
+}
+
+function pickSpec(v){
+  filterSpec=(filterSpec===v)?'':v;
+  renderSecondary();
+  renderProducts();
+}
+
+function pickWeight(v){
+  filterWeight=(filterWeight===v)?'':v;
+  renderSecondary();
+  renderProducts();
+}
+
+// 子项开关：默认关闭时隐藏“子项”有内容的组合装商品
+function onToggleChildren(){
+  showChildren=document.getElementById('toggle-children').checked;
+  // 候选集随开关变化，清空次级选择避免脏状态
+  filterSpec='';
+  filterWeight='';
+  renderSecondary();
   renderProducts();
 }
 
@@ -271,13 +385,14 @@ function renderProducts(){
   const ni=colIdx(gHeaders,'成分');
   const si=colIdx(gHeaders,'规格');
   const wi=colIdx(gHeaders,'净重');
+  const zi=colIdx(gHeaders,'子项');
   let count=0;
   gRows.forEach((row,i)=>{
-    // 筛选
-    if(searchText){
-      const m=row.some(v=>v&&v.includes(searchText));
-      if(!m) return;
-    }
+    // 基础过滤（大类 / 搜索 / 子项开关）
+    if(!matchBase(row)) return;
+    // 次级筛选（规格 / 重量）
+    if(filterSpec && row[si]!==filterSpec) return;
+    if(filterWeight && row[wi]!==filterWeight) return;
     const card=document.createElement('div');
     card.className='card';
     const name=ni>=0?row[ni]:(row[0]||'');
@@ -288,7 +403,7 @@ function renderProducts(){
     // 其他字段
     const details=[];
     gHeaders.forEach((hd,j)=>{
-      if(j!==ni&&j!==si&&j!==wi&&j!==specIdIdx&&row[j]){
+      if(j!==ni&&j!==si&&j!==wi&&j!==specIdIdx&&j!==zi&&row[j]){
         details.push(hd+': '+row[j]);
       }
     });
