@@ -1,40 +1,77 @@
 # 第一部分：准备阶段
 
 # 1.1 导入 DTPWeb 接口
+import contextlib
+import io
+
 from dtpweb import DTPWeb
 
 
- 
+def _clean_text(value):
+    """统一处理 pandas/openpyxl 读出的空值与 NaN，避免把 'nan' 打到标签上。"""
+    if value is None:
+        return ''
+    text = str(value).strip()
+    if text.lower() in ('', 'nan', 'none', 'nat'):
+        return ''
+    return text
+
 
 def print_text(info):
-    # 1.2 创建接口实例
-    api = DTPWeb()
-    # 1.3. 检查本地dtpweb打印助手是否启用，以及获取可用的端口号
-    api.check_plugin()
-    # 1.4. 获取打印机列表
-    printers = api.get_printers()
-    # 2.1 打开打印机
-    api.open_printer(**printers[0])
+    """
+    打印一张标签。
 
-    api.set_print_darkness(7.5)
+    dtpweb 内部会打印大量 request/response 调试信息，这里用 redirect_stdout
+    统一静默；本函数自身不输出任何内容，由调用方打印一行友好结果。
 
-    # 2.2 创建指定大小的打印（标签）任务，相关操作单位为毫米。
-    api.start_job(width=info["width"], height=info["height"])
-    # 2.3 绘制文本信息
-    for text in info['text']:
-        if str(text['text']).lower() == 'nan':  # 修复：比较字符串应使用小写的 'nan'，但通常不应与字符串 'NaN' 比较，此处假设意图是处理非数字情况
-            continue
-        # 注意：当在commit_job中设置orientation=90时，整个标签会旋转90度
-        # 因此在draw_text中不需要再设置orientation参数，否则会导致双重旋转
-        api.draw_text(text['text'], x=text['x'], y=text['y'], width= 50 - 2, height=40, fontHeight=info['fontHeight'])
-        #api.draw_text("德佟电子", width=40, height=30, fontHeight = 3.5)
-    # 2.4 提交打印任务，开始打印
-    # 从info中获取打印方向，默认为0（不旋转）
-    orientation = info.get('orientation', 0)
-    api.commit_job(orientation=orientation)
-    # 2.5 根据实际情况，关闭打印机
-    # 如果还有后续打印，不需要关闭，如果不需要打印，为了避免影响其他用户使# 用打印机，可以关闭打印机。
-    api.close_printer()
+    返回: (success: bool, error: str)
+    """
+    api = None
+    printer_opened = False
+    try:
+        # dtpweb 的 print 都是直接打到 stdout，重定向即可静默，无需改动三方库
+        with contextlib.redirect_stdout(io.StringIO()):
+            api = DTPWeb()
+            if not api.check_plugin():
+                return False, '未检测到打印助手'
+            printers = api.get_printers()
+            if not printers:
+                return False, '未发现可用打印机'
+
+            printer = printers[0]
+            if not api.open_printer(**printer):
+                name = printer.get('name') or printer.get('deviceName') or '未知打印机'
+                return False, '打开打印机失败：{}'.format(name)
+            printer_opened = True
+
+            api.set_print_darkness(7.5)
+
+            if not api.start_job(width=info['width'], height=info['height']):
+                return False, '创建打印任务失败'
+
+            for text in info['text']:
+                value = _clean_text(text.get('text'))
+                if not value:
+                    continue
+                # 注意：orientation 在 commit_job 中设置，draw_text 不再设置，避免双重旋转
+                if not api.draw_text(value, x=text['x'], y=text['y'],
+                                     width=50 - 2, height=40, fontHeight=info['fontHeight']):
+                    return False, '绘制标签内容失败'
+
+            orientation = info.get('orientation', 0)
+            # 非 json 模式下 resultInfo 可能是 None，只有明确 False 才算失败
+            if api.commit_job(orientation=orientation) is False:
+                return False, '提交打印任务失败'
+            return True, ''
+    except Exception as exc:
+        return False, '{}: {}'.format(type(exc).__name__, exc)
+    finally:
+        if printer_opened and api is not None:
+            with contextlib.redirect_stdout(io.StringIO()):
+                try:
+                    api.close_printer()
+                except Exception:
+                    pass
 
 
 

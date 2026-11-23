@@ -452,13 +452,12 @@ async function changeExempt(idx,delta){
 }
 
 async function saveManual(){
-  const headers=['数量','免打',...gHeaders];
+  const headers=['数量',...gHeaders];
   const rows=[];
   gRows.forEach((row,i)=>{
     const q=quantities[i]||0;
     if(q>0){
-      const ex=exempts[i]||'';
-      rows.push([String(q),String(ex),...row]);
+      rows.push([String(q),...row]);
     }
   });
   if(!rows.length){showToast('没有设置数量的商品');return;}
@@ -527,10 +526,10 @@ function markLatest(idx){
 
 async function saveLatest(){
   if(lMarkStart<0){showToast('没有标记的行');return;}
-  const headers=['数量','免打',...lHeaders];
+  const headers=['数量',...lHeaders];
   const rows=[];
   for(let i=lMarkStart;i<lRows.length;i++){
-    rows.push(['1','',...lRows[i]]);
+    rows.push(['1',...lRows[i]]);
   }
   try{
     const r=await api('/api/save_latest',{
@@ -545,8 +544,8 @@ async function saveLatest(){
 
 async function saveLatestFirst(){
   if(!lRows.length){showToast('暂无数据');return;}
-  const headers=['数量','免打',...lHeaders];
-  const row=['1','',...lRows[0]];
+  const headers=['数量',...lHeaders];
+  const row=['1',...lRows[0]];
   try{
     const r=await api('/api/save_latest_first',{
       method:'POST',

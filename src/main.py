@@ -19,6 +19,44 @@ diy_date = ""
 lock_file = paths.LOCK_FILE
 
 
+def clean_text(value):
+    """空值/NaN 统一转为空字符串，避免控制台和标签出现 nan。"""
+    if value is None:
+        return ''
+    text = str(value).strip()
+    return '' if text.lower() in ('', 'nan', 'none', 'nat') else text
+
+
+def short_value(value):
+    """去掉字段自带的“成分：/规格：/净重：”前缀，让提示更短。"""
+    text = clean_text(value)
+    if not text:
+        return ''
+    for sep in ('：', ':'):
+        if sep in text:
+            text = text.split(sep, 1)[-1].strip()
+            break
+    return text
+
+
+def item_label(item):
+    """生成一条打印结果用的简短商品描述。"""
+    parts = [short_value(item.get(key)) for key in ('成分', '规格', '净重')]
+    parts = [part for part in parts if part]
+    if not parts:
+        parts.append(clean_text(item.get('规格ID')) or '商品')
+    return ' '.join(parts)
+
+
+def print_result(label, success, error=''):
+    """每张标签只打印一行友好结果，不输出库的调试信息。"""
+    now = datetime.datetime.now().strftime('%H:%M:%S')
+    if success:
+        print('[{}] 已打印：{}'.format(now, label))
+    else:
+        print('[{}] 打印失败：{}（{}）'.format(now, label, error or '未知原因'))
+
+
 #!/usr/bin/env python3
  
 
@@ -78,8 +116,7 @@ def process_printing(rows, config, diy_date):
     diy_date: 自定义日期
     """
     for item in rows:
-        print(item)
-
+        label = item_label(item)
         info ={}
 
         # 获取标签纸类型和尺寸
@@ -140,9 +177,7 @@ def process_printing(rows, config, diy_date):
                         level_text = '等级：优'
                     else:
                         level_text = str(level_value)
-                    print(f"等级处理: {level_value} -> {level_text}")
-                except Exception as e:
-                    print(f"等级处理异常: {e}")
+                except Exception:
                     level_text = '等级：优'
                 
                 info['text'].append({'text': level_text, 'x': 30, 'y': y_pos})
@@ -200,9 +235,7 @@ def process_printing(rows, config, diy_date):
                         level_text = '等级：优'
                     else:
                         level_text = str(level_value)
-                    print(f"等级处理: {level_value} -> {level_text}")
-                except Exception as e:
-                    print(f"等级处理异常: {e}")
+                except Exception:
                     level_text = '等级：优'
                 info['text'].append({'text': level_text, 'x': 2, 'y': y_pos})
                 y_pos += line_height
@@ -260,9 +293,7 @@ def process_printing(rows, config, diy_date):
                         old_level_text = '等级：优'
                     else:
                         old_level_text = str(old_level_value)
-                    print(f"旧标签等级处理: {old_level_value} -> {old_level_text}")
-                except Exception as e:
-                    print(f"旧标签等级处理异常: {e}")
+                except Exception:
                     old_level_text = '等级：优'
                 info['text'].append({'text': old_level_text, 'x': 30.4, 'y': old_y_pos})
 
@@ -314,9 +345,7 @@ def process_printing(rows, config, diy_date):
                         old_level_text = '等级：优'
                     else:
                         old_level_text = str(old_level_value)
-                    print(f"旧标签等级处理: {old_level_value} -> {old_level_text}")
-                except Exception as e:
-                    print(f"旧标签等级处理异常: {e}")
+                except Exception:
                     old_level_text = '等级：优'
                 info['text'].append({'text': old_level_text, 'x': 30.4, 'y': old_y_pos})
 
@@ -338,7 +367,8 @@ def process_printing(rows, config, diy_date):
                     info['text'].append({'text': '温馨提示：本店所售农产品属于初级农产品，代客分装，散装称重，包装是为了方便运输赠送。', 'x': 2, 'y': old_y_pos})
 
 
-        ddprint.print_text(info)
+        success, error = ddprint.print_text(info)
+        print_result(label, success, error)
 
 def DoXHS(AExcelFile, order_excel_directory):
     def ggid_field(row):
@@ -352,33 +382,21 @@ def DoXHS(AExcelFile, order_excel_directory):
                 if field.strip() == col.strip():
                     return row[col]
     
-    # 读取免打配置文件
+    # 读取免打配置文件（正常流程保持静默）
     def read_exempt_config():
         try:
             config_path = paths.EXEMPT_CONFIG
-            print(f"配置文件路径: {config_path}")
-            print(f"配置文件是否存在: {os.path.exists(config_path)}")
-
-            if os.path.exists(config_path):
-                with open(config_path, 'r', encoding='utf-8-sig') as f:
-                    content = f.read()
-                    print(f"配置文件原始内容: {content}")
-                    config = json.loads(content)
-                    print(f"解析后的配置: {config}")
-                    return config
-            else:
-                print("配置文件不存在")
+            if not os.path.exists(config_path):
                 return {}
-        except FileNotFoundError:
-            print("配置文件不存在 (FileNotFoundError)")
-            return {}
-        except json.JSONDecodeError as e:
-            print(f"JSON解析错误: {e}")
+            with open(config_path, 'r', encoding='utf-8-sig') as f:
+                return json.load(f)
+        except (FileNotFoundError, json.JSONDecodeError):
             return {}
         except Exception as e:
-            print(f"读取配置文件时发生错误: {e}")
+            print('[{}] 读取免打配置失败：{}'.format(
+                datetime.datetime.now().strftime('%H:%M:%S'), e))
             return {}
-    
+
     # 保存免打配置文件
     def save_exempt_config(exempt_config):
         try:
@@ -386,36 +404,46 @@ def DoXHS(AExcelFile, order_excel_directory):
             filtered_config = {k: v for k, v in exempt_config.items() if v > 0}
             with open(paths.EXEMPT_CONFIG, 'w', encoding='utf-8-sig') as f:
                 json.dump(filtered_config, f, indent=2, ensure_ascii=False)
-            print(f"保存免打配置: {filtered_config}")
         except Exception as e:
-            print(f"保存免打配置失败: {e}")
+            print('[{}] 保存免打配置失败：{}'.format(
+                datetime.datetime.now().strftime('%H:%M:%S'), e))
     
     # 处理免打配置
-    def handle_exempt_config(item_ggid, exempt_config, row_data, sku_quantity, subitem_quantity=None):
+    def handle_exempt_config(item_ggid, exempt_config, deduct_count):
         """
-        处理免打配置
+        处理免打配置（仅对自动到来的订单生效）
         item_ggid: 商品规格ID
         exempt_config: 免打配置字典
-        row_data: 商品数据
-        sku_quantity: SKU数量
-        subitem_quantity: 子项数量（可选）
-        返回: 是否需要添加到打印列表
+        deduct_count: 本订单行实际应打印的贴纸数（单品=购买件数；组合装子项=件数*子项数量）
+        返回: True=正常打印；False=整条订单命中免打，全部不打印
+        扣减规则：命中即整条跳过，并按 deduct_count 扣减免打额度；额度不足覆盖本单时也整条跳过、额度清零
         """
-        if item_ggid in exempt_config:
-            exempt_count = exempt_config[item_ggid]
-            if exempt_count > 0:
-                print(f"跳过打印 {item_ggid}，剩余免打次数: {exempt_count - 1}")
-                new_exempt_count = exempt_count - 1
-                if new_exempt_count > 0:
-                    exempt_config[item_ggid] = new_exempt_count
-                else:
-                    # 免打次数减完为0，移除该配置
-                    print(f"移除 {item_ggid} 的免打配置")
-                    del exempt_config[item_ggid]
-                save_exempt_config(exempt_config)
-                return False  # 跳过打印
+        if item_ggid not in exempt_config:
+            return True
+        # 脏值容错：非整数 / <=0 视为无效配置，清除并正常打印
+        try:
+            exempt_count = int(exempt_config[item_ggid])
+        except (TypeError, ValueError):
+            exempt_config.pop(item_ggid, None)
+            save_exempt_config(exempt_config)
+            return True
+        if exempt_count <= 0:
+            exempt_config.pop(item_ggid, None)
+            save_exempt_config(exempt_config)
+            return True
+
+        # 命中免打：整条订单不打印，按件数扣减
+        try:
+            deduct = max(1, int(deduct_count))
+        except (TypeError, ValueError):
+            deduct = 1
+        remaining = exempt_count - deduct
+        if remaining > 0:
+            exempt_config[item_ggid] = remaining
         else:
-            return True  # 没有免打配置，正常打印
+            exempt_config.pop(item_ggid, None)
+        save_exempt_config(exempt_config)
+        return False
     
     # 错误提示方法
     def log_error(message, exit_process=False, order_excel_directory=None, current_file=None):
@@ -426,74 +454,81 @@ def DoXHS(AExcelFile, order_excel_directory):
         order_excel_directory: 订单Excel目录
         current_file: 当前处理的文件
         """
-        print("=" * 50)
-        print(f"【错误提示】{message}")
+        detail = message
         if exit_process:
-            print("=" * 50)
+            extras = []
             if order_excel_directory:
-                print(f"1. 读取excel的文档目录: {order_excel_directory}")
+                extras.append('订单目录：{}'.format(order_excel_directory))
             if current_file:
-                print(f"2. 本次读取的excel文件: {current_file}")
-            print("3. 提示语：请尝试删除目录文件中的所有excel文件进行后重试")
-            print("=" * 50)
+                extras.append('文件：{}'.format(current_file))
+            if extras:
+                detail += '（{}）'.format('；'.join(extras))
+        print('[{}] 错误：{}'.format(datetime.datetime.now().strftime('%H:%M:%S'), detail))
     
     # 处理订单数据
-    def process_order_data(AExcelFile, GoodsConfig, order_excel_directory):
+    def process_order_data(AExcelFile, GoodsConfig, order_excel_directory, apply_exempt=True):
         """
         处理订单数据
         AExcelFile: Excel文件路径
         GoodsConfig: 商品配置DataFrame
         order_excel_directory: 订单Excel目录
+        apply_exempt: 是否应用免打配置。自动订单=True；网页生成的手动打单/补打=False（用户显式要打，绕过免打且不扣减额度）
         返回: (是否成功, 处理后的商品列表, 免打配置)
         """
         rows = []
-        # 读取免打配置
-        exempt_config = read_exempt_config()
+        # 仅自动订单读取并回写免打配置；手动单完全不碰免打配置
+        exempt_config = read_exempt_config() if apply_exempt else {}
         # 打开 excel 文件
         df = pd.read_excel(AExcelFile)
         for index, row in df.iterrows():
-            guige_id = ggid_field(row)
-            if guige_id is None:
-                print(f'{index}行存在非法表格，请检查')
-                log_error(f'{index}行存在非法表格（规格ID为空），请检查', exit_process=True, 
+            raw_ggid = ggid_field(row)
+            if raw_ggid is None or str(raw_ggid).strip() == '':
+                log_error(f'{index}行存在非法表格（规格ID为空），请检查', exit_process=True,
                          order_excel_directory=order_excel_directory, current_file=AExcelFile)
                 return False, [], exempt_config
-            #
-            sku_quantity = sku_quantity_field(row)            
+            # 统一为字符串，避免 pandas/openpyxl 数值类型差异导致匹配失败
+            guige_id = str(raw_ggid).strip()
+            # 数量安全转换（pandas 可能给出 int64/float64/None）
+            try:
+                sku_quantity = int(float(sku_quantity_field(row)))
+            except (TypeError, ValueError):
+                sku_quantity = 0
+            if sku_quantity <= 0:
+                continue
 
             found = False
             for idx, goods_row in GoodsConfig.iterrows():
-                if goods_row['规格ID'] == guige_id:
+                if str(goods_row['规格ID']).strip() == guige_id:
                     if isinstance(goods_row['子项'], str) and goods_row['子项'] != "": #子项代表组合项目，比如红枣*500*2 或者 红枣250*1+莲子250*1，存储的格式为 子项ggid#数量,子项ggid#数量
-                        print('子项存在')
-                        print(goods_row['子项'])
-                        print(goods_row['规格ID'])
                         subitems = goods_row['子项'].split(',')
                         for subitem in subitems:
                             subitem_parts = subitem.split('#')
                             subitem_ggid = subitem_parts[0].strip()
-                            print(subitem_ggid)
                             subitem_quantity = int(subitem_parts[1])
                             for idx, goods_row_item in GoodsConfig.iterrows():
-                                if goods_row_item['规格ID'] == subitem_ggid:
-                                    row_data = goods_row_item
- 
-                                    row_data['sku_quantity'] = sku_quantity
+                                if str(goods_row_item['规格ID']).strip() == subitem_ggid:
                                     found = True
-                                    # 检查子项的免打配置
-                                    should_print = handle_exempt_config(subitem_ggid, exempt_config, row_data, sku_quantity, subitem_quantity)
+                                    # 组合装每个子项共打印 件数*子项数量 张贴纸；命中免打则该子项整条跳过
+                                    sticker_count = sku_quantity * subitem_quantity
+                                    if apply_exempt:
+                                        should_print = handle_exempt_config(subitem_ggid, exempt_config, sticker_count)
+                                    else:
+                                        should_print = True
                                     if should_print:
                                         # 正常打印
-                                        for _ in range(sku_quantity * subitem_quantity):
+                                        row_data = goods_row_item.copy()
+                                        row_data['sku_quantity'] = sku_quantity
+                                        for _ in range(sticker_count):
                                             rows.append(row_data)
                                     break
                     else:
                         found = True
                         row_data = goods_row
                         # 检查主项的免打配置
-                        print(f"当前规格ID: {guige_id}")
-                        print(f"免打配置: {exempt_config}")
-                        should_print = handle_exempt_config(str(guige_id), exempt_config, row_data, sku_quantity)
+                        if apply_exempt:
+                            should_print = handle_exempt_config(guige_id, exempt_config, sku_quantity)
+                        else:
+                            should_print = True
                         if should_print:
                             # 正常打印
                             for _ in range(sku_quantity):
@@ -502,15 +537,18 @@ def DoXHS(AExcelFile, order_excel_directory):
                     break
 
             if not found:
-                print(f'{guige_id} 的 SKU 名称 "{row["SKU名称"]}" 没有在 GoodsConfig 中找到')
+                sku_name = clean_text(row.get('SKU名称')) if hasattr(row, 'get') else ''
+                log_error('规格ID {}（{}）未在商品配置中找到'.format(guige_id, sku_name or '未知商品'))
                 #使用默认软件打开GoodsConfig文件
                 os.startfile(paths.GOODS_XLSX)
-        
+
         return True, rows, exempt_config
 
 
+    # 手动打单/补打（网页生成，文件名含“手动打单”）代表用户显式要打，绕过免打；自动订单才应用免打
+    is_manual_order = '手动打单' in os.path.basename(AExcelFile)
     # 处理订单数据
-    success, rows, exempt_config = process_order_data(AExcelFile, GoodsConfig, order_excel_directory)
+    success, rows, exempt_config = process_order_data(AExcelFile, GoodsConfig, order_excel_directory, apply_exempt=not is_manual_order)
     if not success:
         return False
 
@@ -552,7 +590,6 @@ def DoXHS(AExcelFile, order_excel_directory):
         """
         rows_df = pd.DataFrame(rows)
         rows_df.to_excel(file_path, index=False)
-        print(f"已保存到 {file_path}")
 
     # 保存到Excel文件
     save_to_excel(rows)
@@ -574,8 +611,8 @@ def main():
     GoodsConfig = pd.read_excel(paths.GOODS_XLSX)
 
     if config is None:
-        print("Failed to load config.")
-
+        print('[{}] 错误：配置加载失败'.format(datetime.datetime.now().strftime('%H:%M:%S')))
+        return False
 
 
     # 打印文件存储地址
@@ -614,12 +651,8 @@ if __name__ == "__main__":
     check_lock_file(lock_file_path)
     create_lock_file(lock_file_path)
 
-    print(f"传入的参数数量：{len(sys.argv) - 1}")
-    print(f"传入的参数列表：{sys.argv[1:]}")
     if len(sys.argv) - 1 > 0:
         if sys.argv[1] == '--diy_date':
-            print(f"打印自定义日期")
- 
             while True:
                 date_str = input("请输入自定义日期，格式为YYYY-MM-DD: ")
                 try:
@@ -637,11 +670,9 @@ if __name__ == "__main__":
     try:
         while True:
             if main():
-                time.sleep(10) 
+                time.sleep(10)
                 if diy_date != "":
-                    print("程序退出：" + datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
                     break
-                print("程序运行正常：" + datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
             else:
                 break
     finally:
