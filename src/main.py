@@ -672,7 +672,9 @@ if __name__ == "__main__":
             if main():
                 time.sleep(10)
                 if diy_date != "":
+                    print("程序退出：" + datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
                     break
+                print("程序运行正常：" + datetime.datetime.now().strftime('%Y-%m-%d %H:%M:%S'))
             else:
                 break
     finally:
